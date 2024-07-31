@@ -1,0 +1,10 @@
+black
+ipykernel
+ujson
+
+groq
+mem0ai
+qdrant_client
+huggingface_hub
+
+python-telegram-bot
