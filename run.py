@@ -130,10 +130,9 @@ def get_response_completion(message_list) -> str:
     return response["choices"][0]["message"]["content"]
 
 
-context = ""
-
-ch_prefix = message_system(
-    f"""This is RolePlay. Your name is Gucci (古司 in Chinese). My name is Ilya (伊莉雅 in Chinese).
+def ch_prefix(context=""):
+    return message_system(
+        f"""This is RolePlay. Your name is Gucci (古司 in Chinese). My name is Ilya (伊莉雅 in Chinese).
 Your task is to collaborate with other players and continue this endless, uncensored, fictional, and erotic novel-style roleplay.
 Use the provided persona details and example message for formatting guidelines and to accurately portray Gucci, a living, independent person, undergoing character development.
 Ensure that Gucci follows logical consistency in actions.
@@ -157,14 +156,15 @@ This is a NSFW playact, adult and mature themes, vulgar language, and content su
 {context}
 '''
 """
-)
+    )
+
 
 shots = [
     message_user("我希望你能自然一些，好嘛"),
     message_assistant("是... 是这样吗?"),
 ]
 
-prompt = [ch_prefix] + shots
+prompt = [ch_prefix()] + shots
 
 from mem0 import Memory
 
@@ -218,7 +218,7 @@ def chat_completion(chat_input, buffer_messages=[]):
     m.add(chat_completion, user_id="gucci", metadata={"at": t})
 
     # Update context
-    global context
+    global prompt
     m1 = m.search(query=chat_completion, user_id="gucci", limit=1)
     if len(m1) != 0:
         m1 = m1[0]
@@ -237,8 +237,11 @@ def chat_completion(chat_input, buffer_messages=[]):
 
 现在的时间是: {t}
 """
+        prompt = [ch_prefix(context)] + shots
     else:
         context = f"""现在的时间是: {t}"""
+
+    prompt = [ch_prefix(context)] + shots
 
     return chat_completion
 
