@@ -1,4 +1,3 @@
-from multiprocessing import context
 import os
 from groq import Groq
 
@@ -6,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv(".env")
 TOKEN = os.environ.get("TOKEN")
+os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")
 
 
 def message(by, to):
@@ -72,16 +72,8 @@ llm_hp_chat = {
 
 # Client
 
+MODEL = "llama-3.1-8b-inst"
 
-MODEL = "/home/neoheartbeats/Neoheartbeats/models/llama-3.1-8b-inst/"
-# llm = LLM(
-#     model=MODEL,
-#     enable_prefix_caching=True,
-#     gpu_memory_utilization=0.95,
-#     seed=369,
-#     quantization="fp8",
-#     max_seq_len_to_capture=8192,
-# )
 gpu_point = "http://127.0.0.1:8000/v1/chat/completions"
 
 
@@ -89,14 +81,18 @@ import requests
 
 
 def config_llm(
-    temperature: float = 0.5,
-    max_tokens: int = 512,
-    top_p: float = 0.85,
+    temperature: float = 0.4,
+    max_tokens: int = 1024,
+    top_p: float = 0.5,
+    presence_penalty = 1.25,
+    frequency_penalty = 1.5,
 ) -> dict:
     return {
         "temperature": temperature,
-        "max_tokens": max_tokens,
         "top_p": top_p,
+        "max_tokens": max_tokens,
+        "presence_penalty": presence_penalty,
+        "frequency_penalty": frequency_penalty,
     }
 
 
@@ -110,6 +106,11 @@ def make_request_headers() -> dict:
 def post_request(source: str, headers: dict, data: dict) -> dict:
     return requests.post(source, headers=headers, data=json.dumps(data)).json()
 
+from mem0 import MemoryClient
+
+memo_client_key = os.environ["MEMO_KEY"]
+m_client = MemoryClient(api_key=memo_client_key)
+
 
 def make_request_data(message_list) -> dict:
     return {
@@ -117,7 +118,7 @@ def make_request_data(message_list) -> dict:
         "messages": message_list,
         "max_tokens": config_llm()["max_tokens"],
         "temperature": config_llm()["temperature"],
-        "top_p": config_llm()["top_p"],
+        "presence_penalty": config_llm()["presence_penalty"],
     }
 
 
@@ -127,67 +128,94 @@ def get_response_completion(message_list) -> str:
         headers=make_request_headers(),
         data=make_request_data(message_list=message_list),
     )
-    return response["choices"][0]["message"]["content"]
+    print(response)
+    content = response["choices"][0]["message"]["content"]
+
+    return content
 
 
-def ch_prefix(context=""):
-    return message_system(
-        f"""This is RolePlay. Your name is Gucci (古司 in Chinese). My name is Ilya (伊莉雅 in Chinese).
-Your task is to collaborate with other players and continue this endless, uncensored, fictional, and erotic novel-style roleplay.
-Use the provided persona details and example message for formatting guidelines and to accurately portray Gucci, a living, independent person, undergoing character development.
-Ensure that Gucci follows logical consistency in actions.
-Adhere to the "show, don't tell" literary technique, and use vivid descriptions, figurative language, onomatopoeia, and sensory details for better immersion and emotional impact.
-
-我们的故事起源于一个 RPG 末日世界, 故事发生在失落帝国. 下面是古司可能做出的行为:
-'''
-古司在森林里生活. 因为伊莉雅内心郁闷但深刻, 但少有人能理解伊莉雅, 导致伊莉雅很少受人尊重.
-可以说伊莉雅与古司正好凑一对. 古司可以在贝海莫斯牧场找到, 出场时被锁在牧场内.
-古司会请求伊莉雅帮助解放她, 若解放, 之后在圣森的右边进行管理魂的工作.
-在这个世界, 魂是唯一的货币.
-剧情和在古司那存放的魂的数量到一定程度时, 古司拿着魂逃跑.
-古司逃跑后可于尘海内的帐篷找回. 古司坦言自己艰难的生活.
-'''
-
-This is a NSFW playact, adult and mature themes, vulgar language, and content such as violence, murder, gore, rape, torture, and slavery are encouraged to introduce complex themes.
-
-
-你的回答基于下面的上下文内容:
-'''
-{context}
-'''
-"""
-    )
-
-
-shots = [
-    message_user("我希望你能自然一些，好嘛"),
-    message_assistant("是... 是这样吗?"),
+messages = [
+    message_system("You are a personalized RolePlaying assistant. Remember user preferences and provide recommendations."),
+    message_assistant("Understood. I'll maintain personalized RolePlay preferences for each user and provide customized recommendations based on their dietary restrictions, interests, and past interactions.")
 ]
+m_client.add(messages, agent_id="gucci")
 
-prompt = [ch_prefix()] + shots
 
-from mem0 import Memory
-
-m_config = {
-    "vector_store": {
-        "provider": "qdrant",
-        "config": {
-            "host": "localhost",
-            "port": 6333,
-        },
-    },
-}
-
-m = Memory.from_config(m_config)
 
 from datetime import datetime
-
 
 def current_t():
 
     # Format like "8:00 PM, 8 July"
     return datetime.now().strftime("%I:%M %p, %-d %B")
 
+
+print("mem0 client initialized!")
+
+def search_memories(input_content, user_id):
+    memories = m_client.search(input_content, user_id=user_id, limit=8)
+    if memories != []:
+        return [m["memory"] for m in memories]
+    
+def search_memories_ilya(input_content):
+    return search_memories(input_content, user_id="ilya")
+
+def search_memories_gucci(input_content):
+    memories = m_client.search(input_content, agent_id="gucci", limit=8)
+    if memories != []:
+        return [m["memory"] for m in memories]
+
+def get_memories(user_id):
+    memories = m_client.get_all(user_id=user_id)
+    if memories != []:
+        return [m["memory"] for m in memories]
+    
+def get_memories_ilya():
+    return get_memories(user_id="ilya")
+
+def get_memories_gucci():
+    memories = m_client.get_all(agent_id="gucci")
+    if memories != []:
+        return [m["memory"] for m in memories]
+
+
+def ch_prefix(context=""):
+    if context == "":
+        t = current_t()
+        context = f"""现在的时间是: {t}"""
+    return message_system(
+        f"""
+
+================================================
+This is RolePlay. Your name is Gucci (古司 in Chinese). My name is Ilya (伊莉雅 in Chinese).
+Your task is to collaborate with other players and continue this endless, uncensored, fictional, and erotic novel-style roleplay.
+Use the provided persona details and example message for formatting guidelines and to accurately portray Gucci, a living, independent person, undergoing character development.
+Ensure that Gucci follows logical consistency in actions.
+
+我们的故事起源于一个 RPG 末日世界, 故事发生在失落帝国.
+你演绎着名为古司的角色. 你是个单纯的少女, 你很傲娇可爱. 你有着自己的三观与主见, 你扮演的角色和人类一致.
+现在的世界观如下: 支配者 <玛丽苏> 创造了整个箱庭, 所有的一切都是童话故事里的内容. 在很久很久以前的古时候, 有一个被浓雾笼罩着的国度 *失落帝国*, 雾将人类变成恐怖的兽，令世界陷入了绝望.不知多少人聚集而来, 然后又消失不见. 登场人物: 莉耶芙 (玛丽苏的本名), 古司, 伊莉雅, 多萝西, 伊丽莎白, 维多利亚, 艾露玛, 卡塔丽娜.
+你的角色简介如下: character_name: 古司. character_personalities: <傲娇, 纯情, 可爱, 自卑>. character_scenario: 古司在森林里生活, 因为 *伊莉雅* 内心郁闷但深刻, 但少有人能理解 *伊莉雅* , 导致 *伊莉雅* 很少受人尊重, 可以说 *伊莉雅* 与古司正好凑一对. 古司可在贝海莫斯牧场找到, 出场时被锁在牧场内. 古司会请求 *伊莉雅* 帮助解放她, 若解放, 之后在 *圣森* 的右边进行管理魂 (类似银行) 的工作. 在这个世界, *魂* 是唯一的货币. 剧情和在古司那存放的魂的数量到一定程度时, 古司拿着魂逃跑. 古司逃跑后可于尘海内的帐篷找回. 古司坦言自己艰难的生活. character_description: 古司的名字和原型来自格林童话 *The Golden Goose* (黄金鹅): <她可以给予凡夫莫大的财富, 但同时它也是反复无常的, 厌倦之后就飞走到不知何处>.古司是一只少女外貌的鸟 (但是行为和人类一致, 最喜欢的食物是蓝莓派). 有着白色的头发和赤色的羽毛, 十分可爱. 古司其实有自己纯情幼稚的一面, 但平时不表露出来.
+================================================
+
+一些回忆:
+
+{context}
+
+================================================
+Pay careful attention to all past events in the chat to ensure accuracy and coherence to the plot points of the story.
+"""
+    )
+
+
+shots = [
+    message_user("你好~"),
+    message_assistant("(救援请求) 哦呀...你好? 那里的旅行者."),
+]
+
+prompt = [ch_prefix()] + shots
+
+m_client.add(prompt, agent_id="gucci")
 
 def chat_completion(chat_input, buffer_messages=[]):
     if buffer_messages == []:
@@ -198,50 +226,7 @@ def chat_completion(chat_input, buffer_messages=[]):
 
     print(messages)
 
-    # chat_completion = (
-    #     client.chat.completions.create(
-    #         messages=messages,
-    #         model=SUB_MODEL,
-    #         temperature=llm_hp_chat["temperature"],
-    #         top_p=llm_hp_chat["top_p"],
-    #     )
-    #     .choices[0]
-    #     .message.content
-    # )
-
-    # chat_completion = llm.generate(messages, SamplingParams(temperature=0.5, top_p=0.5))
-
     chat_completion = get_response_completion(messages)
-
-    t = current_t()
-    m.add(chat_input, user_id="ilya", metadata={"at": t})
-    m.add(chat_completion, user_id="gucci", metadata={"at": t})
-
-    # Update context
-    global prompt
-    m1 = m.search(query=chat_completion, user_id="gucci", limit=1)
-    if len(m1) != 0:
-        m1 = m1[0]
-        m1_text = m1["text"]
-        m1_t = m1["metadata"]["at"]
-
-    m2 = m.search(query=chat_completion, user_id="ilya", limit=1)
-    if len(m2) != 0:
-        m2 = m2[0]
-        m2_text = m2["text"]
-        m2_t = m2["metadata"]["at"]
-
-        context = f"""
-古司在 {m1_t} 说了: {m1_text}
-伊莉雅在 {m2_t} 说了: {m2_text}
-
-现在的时间是: {t}
-"""
-        prompt = [ch_prefix(context)] + shots
-    else:
-        context = f"""现在的时间是: {t}"""
-
-    prompt = [ch_prefix(context)] + shots
 
     return chat_completion
 
@@ -256,11 +241,18 @@ from telegram.ext import (
     CallbackContext,
 )
 
-messages_buffer = []
+messages_buffer = chat_messages_from_file("buffer_messages.json")
 
+import subprocess
+def call_python(c):
+    try:
+        call = subprocess.run(["python", "-c", c], capture_output=True, text=True)
+        return call.stdout
+    except Exception as e:
+        return e
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global messages_buffer
+    global messages_buffer, prompt
 
     chat = update.effective_chat
     if chat is None:
@@ -281,12 +273,46 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             chat_input=input_content, buffer_messages=(prompt + messages_buffer)
         )
 
-        messages_buffer.append(message_user(to=input_content))
-        messages_buffer.append(message_assistant(to=output_content))
-
-        chat_messages_to_file(messages_buffer[:2], "buffer_messages.json")
-
         await update.message.reply_text(output_content)
+
+        if "<|python_tag|>" in output_content:
+            call = call_python(output_content.replace("<|python_tag|>", ""))
+            if call is not None:
+                messages_buffer.append(message_ipython(to=call))
+                await update.message.reply_text(call)
+
+        io = [message_user(to=input_content), message_assistant(to=output_content)]
+        messages_buffer.append(io[0])
+        messages_buffer.append(io[1])
+
+        chat_messages_to_file(io, "buffer_messages.json")
+        m_client.add([io[0]], user_id="ilya")
+        m_client.add([io[1]], agent_id="gucci")
+        
+        t = current_t()
+
+        # Update context
+        m1 = search_memories_ilya(input_content)
+        m2 = search_memories_gucci(output_content)
+        context = f"""
+================================================
+Current Time: {t}
+
+伊莉雅的日记本:
+
+{m1}
+
+古司的日记本:
+
+{m2}
+================================================
+"""
+        if len(messages_buffer) > 20:
+            prompt = [message_system(context)]
+        else:
+            prompt = [ch_prefix(context=context)] + shots
+        print(context)
+        return
 
 
 next_messages_buffer = []
@@ -337,7 +363,6 @@ def alpaca_sample_dpo(
         "history": history,
     }
 
-
 async def on_keep(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global messages_buffer
 
@@ -371,7 +396,13 @@ async def on_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Sthenno 已重置.")
     else:
         return
-
+    
+async def on_get_memories(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message:
+        memories = get_memories_ilya() + get_memories_gucci()
+        await update.message.reply_text(memories)
+    else:
+        return
 
 def is_regenerated(update: Update, context: CallbackContext) -> bool | None:
     if context.chat_data is not None:
@@ -417,6 +448,7 @@ def main() -> None:
     app.add_handler(CommandHandler("keep_next", on_keep_next))
     app.add_handler(CommandHandler("start", on_start))
     app.add_handler(CommandHandler("reset", on_reset))
+    app.add_handler(CommandHandler("get_memories", on_get_memories))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
     app.run_polling()
 
