@@ -2,3 +2,4 @@
 /models
 /qdrant_storage
 using_vllm/.env
+using_vllm/notebooks/.env
