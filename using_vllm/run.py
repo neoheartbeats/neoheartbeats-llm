@@ -27,6 +27,7 @@ def message_assistant(to):
 def message_ipython(to):
     return message("ipython", to)
 
+
 import ujson as json
 
 
@@ -99,9 +100,10 @@ def print_memories() -> None:
 print("mem0 client initialized!")
 
 MODEL = "llama-3.1-8b-inst"
+TEST_MODEL = "mistral-nemo:latest"
 
 gpu_point = "http://127.0.0.1:8000/v1/chat/completions"
-
+tmp_point = "http://127.0.0.1:11434/v1/chat/completions"
 
 import requests
 
@@ -122,7 +124,7 @@ def make_request_data(message_list) -> dict:
         "model": MODEL,
         "messages": message_list,
         "max_tokens": 1024,
-        "temperature": 0.5,
+        "temperature": 0.35,
         "top_p": 0.90,
         "presence_penalty": 1.25,
     }
@@ -185,9 +187,9 @@ def prefix_messages() -> list:
 
 
 messages_buffer = [
-        message_user("你好~"),
-        message_assistant("哦呀...你好? 那里的旅行者."),
-    ]
+    message_user("你好~"),
+    message_assistant("哦呀...你好? 那里的旅行者."),
+]
 
 import subprocess
 
@@ -235,15 +237,13 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
         print(message_list)
 
-        output_content = get_response_completion(
-            message_list=message_list
-        )
+        output_content = get_response_completion(message_list=message_list)
 
         assistant_message = message_assistant(to=output_content)
         messages_buffer.append(assistant_message)
 
-        chat_messages_to_file(messages=messages_buffer)
-        await update.message.reply_text(output_content)        
+        # chat_messages_to_file(messages=messages_buffer)
+        await update.message.reply_text(output_content)
 
         # Update memories
         try:
@@ -255,7 +255,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             memo_user = memory_search(user_message)
             memo_assistant = memory_search(assistant_message)
             return
-        
+
         except Exception as e:
             print(f"Memory Error: {e}")
             return
@@ -270,9 +270,10 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def on_make(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global messages_buffer
-    messages_buffer = []
-
-    memory_clean()
+    messages_buffer = [
+    message_user("你好~"),
+    message_assistant("哦呀...你好? 那里的旅行者."),
+]
 
     if update.message:
         await update.message.reply_text("Sthenno 已重置.")
