@@ -1,6 +1,6 @@
 import os
 from rich import print
-
+from typing import TypeAlias
 from dotenv import load_dotenv
 
 load_dotenv(".env")
@@ -31,16 +31,27 @@ def message_ipython(to):
 import ujson as json
 
 
-def chat_messages_from_file(file):
-    with open(file, "r", encoding="utf-8") as f:
-        return json.load(f)
+chat_data: TypeAlias = list[dict[str, str]]
 
 
-def chat_messages_to_file(messages, file="./chat_messages.json"):
-    current_messages = chat_messages_from_file(file)
-    with open(file, "w", encoding="utf-8") as f:
-        messages += current_messages
-        return json.dump(messages, f, indent=2, ensure_ascii=False)
+def make_chat_file(filename: str, dt: chat_data) -> None:
+    return json.dump(
+        dt,
+        open(filename, "w", encoding="utf-8"),
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def from_chat_file(filename: str) -> chat_data:
+    return json.load(open(filename, "r", encoding="utf-8"))
+
+
+def to_chat_file(filename: str, dt: chat_data) -> None:
+    return make_chat_file(
+        filename=filename,
+        dt=from_chat_file(filename=filename) + dt,
+    )
 
 
 from mem0 import Memory
@@ -93,17 +104,14 @@ def print_memories() -> None:
     memory_list = m.get_all()
     if memory_list == []:
         return
-    # memories = [m["memory"] for m in memory_list]
-    print(memory_list[:2])
+    print(memory_list[:4])
 
 
 print("mem0 client initialized!")
 
-MODEL = "llama-3.1-8b-inst"
-TEST_MODEL = "mistral-nemo:latest"
+MODEL = "sthenno"
 
 gpu_point = "http://127.0.0.1:8000/v1/chat/completions"
-tmp_point = "http://127.0.0.1:11434/v1/chat/completions"
 
 import requests
 
@@ -123,10 +131,11 @@ def make_request_data(message_list) -> dict:
     return {
         "model": MODEL,
         "messages": message_list,
-        "max_tokens": 1024,
-        "temperature": 0.35,
-        "top_p": 0.90,
-        "presence_penalty": 1.25,
+        "max_tokens": 256,
+        "temperature": 0.40,
+        "top_p": 0.60,
+        "presence_penalty": 1.85,
+        "frequency_penalty": 0.10,
     }
 
 
@@ -242,7 +251,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         assistant_message = message_assistant(to=output_content)
         messages_buffer.append(assistant_message)
 
-        # chat_messages_to_file(messages=messages_buffer)
+        to_chat_file(filename="chat.json", dt=[user_message, assistant_message])
         await update.message.reply_text(output_content)
 
         # Update memories
@@ -271,9 +280,9 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_make(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global messages_buffer
     messages_buffer = [
-    message_user("你好~"),
-    message_assistant("哦呀...你好? 那里的旅行者."),
-]
+        message_user("你好~"),
+        message_assistant("哦呀...你好? 那里的旅行者."),
+    ]
 
     if update.message:
         await update.message.reply_text("Sthenno 已重置.")

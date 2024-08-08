@@ -1,8 +1,8 @@
 black
-ipykernel
+jupyter
 ujson
 
-
+openai
 mem0ai
 
 python-telegram-bot
