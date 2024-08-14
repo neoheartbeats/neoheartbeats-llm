@@ -5,3 +5,8 @@ using_vllm/.env
 using_vllm/notebooks/.env
 LLaMA-Factory
 LLaMA-Factory
+chat.json
+conversation_log.json
+notebooks/self_cognition_01.jsonl
+notebooks/gpt4o_ft_01.jsonl
+ds/self_cognition.json
