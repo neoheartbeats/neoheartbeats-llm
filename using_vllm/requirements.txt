@@ -1,7 +1,0 @@
-black[jupyter]
-jupyter
-ujson
-dotenv
-openai
-qdrant-client
-python-telegram-bot
