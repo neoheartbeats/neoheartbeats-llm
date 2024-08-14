@@ -1,8 +1,7 @@
-black
+black[jupyter]
 jupyter
 ujson
-
+dotenv
 openai
-mem0ai
-
+qdrant-client
 python-telegram-bot

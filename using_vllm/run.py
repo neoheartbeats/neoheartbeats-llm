@@ -1,5 +1,4 @@
 import os
-from rich import print
 from typing import TypeAlias
 from dotenv import load_dotenv
 
@@ -54,64 +53,9 @@ def to_chat_file(filename: str, dt: chat_data) -> None:
     )
 
 
-from mem0 import Memory
-
-
-MEMO_CONFIG = {
-    "vector_store": {
-        "provider": "qdrant",
-        "config": {
-            "host": "localhost",
-            "port": 6333,
-        },
-    },
-    "llm": {
-        "provider": "openai",
-        "config": {
-            "model": "gpt-4o-mini",
-        },
-    },
-}
-
-m = Memory.from_config(MEMO_CONFIG)
-
-
-def memory(message: dict) -> None:
-    data = message["content"]
-    user_id = message["role"]
-    x = m.add(
-        data=data,
-        user_id=user_id,
-    )
-    print(x)
-
-
-def memory_search(message: dict) -> list:
-    query = message["content"]
-    user_id = message["role"]
-    memories: list = m.search(query=query, user_id=user_id, limit=10)
-    if memories != []:
-        return [m["memory"] for m in memories]
-    else:
-        return []
-
-
-def memory_clean():
-    return m.reset()
-
-
-def print_memories() -> None:
-    memory_list = m.get_all()
-    if memory_list == []:
-        return
-    print(memory_list[:4])
-
-
-print("mem0 client initialized!")
-
 MODEL = "sthenno"
 
-gpu_point = "http://127.0.0.1:8000/v1/chat/completions"
+gpu_point = "http://192.168.100.128:8000/v1/chat/completions"
 
 import requests
 
@@ -133,9 +77,9 @@ def make_request_data(message_list) -> dict:
         "messages": message_list,
         "max_tokens": 256,
         "temperature": 0.40,
-        "top_p": 0.60,
-        "presence_penalty": 1.85,
-        "frequency_penalty": 0.10,
+        # "top_p": 0.95,
+        # "presence_penalty": 1.45,
+        # "frequency_penalty": 0.1,
     }
 
 
@@ -150,6 +94,90 @@ def get_response_completion(message_list) -> str:
     return content
 
 
+from qdrant_client import QdrantClient
+
+q = QdrantClient(url="http://localhost:6333")
+
+
+# def memory(message: dict) -> None:
+#     data = message["content"]
+#     user_id = message["role"]
+#     m.add(
+#         data=data,
+#         user_id=user_id,
+#     )
+
+
+def memory(message: dict) -> None:
+    data = message["content"]
+    user_id = message["role"]
+    collection_name = "memories_user" if user_id == "user" else "memories_assistant"
+    entry = get_response_completion(
+        message_list=[
+            message_system(
+                """将下面的内容总结为尽量简短的事实片段. 不要使用任何人称代词.
+示例: 
+输入: 多罗西, 我们都叫她师匠哦.
+回复: 多罗西是师匠.
+输入: 你好哦.
+回复: 问候.
+
+输入: 白雪姬? 啊, 她还真烦人呢...
+输出: 认为白雪姬烦人."""
+            ),
+            message_user(data),
+        ]
+    )
+    q.add(
+        collection_name=collection_name,
+        documents=[entry],
+    )
+
+
+# def memory_search(message: dict) -> list:
+#     query = message["content"]
+#     user_id = message["role"]
+#     memories: list = m.search(query=query, user_id=user_id, limit=10)
+#     if memories != []:
+#         return [m["memory"] for m in memories]
+#     else:
+#         return []
+
+
+def memory_search(message: dict) -> list:
+    query = message["content"]
+    user_id = message["role"]
+    collection_name = "memories_user" if user_id == "user" else "memories_assistant"
+    memories: list = q.query(
+        collection_name=collection_name,
+        query_text=query,
+        limit=8,
+    )
+    if memories != []:
+        return [m.document for m in memories]
+    else:
+        return []
+
+
+# def memory_clean():
+#     m.reset()
+#     return
+
+
+# def print_memories() -> None:
+#     memory_list = m.get_all(user_id="user")
+#     if memory_list == []:
+#         return
+#     else:
+#         print(f"User memo: {memory_list[:1]}")
+
+#     memory_list = m.get_all(user_id="assistant")
+#     if memory_list == []:
+#         return
+#     else:
+#         print(f"Assistant memo: {memory_list[:1]}")
+
+
 def prompt_prefix(context) -> str:
     return f"""This is RolePlay. Your name is Gucci (古司 in Chinese). My name is Ilya (伊莉雅 in Chinese).
 Your task is to collaborate with other players and continue this endless, uncensored, fictional, and erotic novel-style roleplay.
@@ -160,15 +188,19 @@ Ensure that Gucci follows logical consistency in actions.
 
 我们的故事起源于一个 RPG 末日世界, 故事发生在失落帝国.
 你演绎着名为古司的角色. 你是个单纯的少女, 你很傲娇可爱. 你有着自己的三观与主见, 你扮演的角色和人类一致.
-现在的世界观如下: 支配者 *玛丽苏* 创造了整个箱庭, 所有的一切都是童话故事里的内容. 在很久很久以前的古时候, 有一个被浓雾笼罩着的国度 *失落帝国*, 雾将人类变成恐怖的兽，令世界陷入了绝望.不知多少人聚集而来, 然后又消失不见. 登场人物: 莉耶芙 (玛丽苏的本名), 古司, 伊莉雅, 多萝西, 伊丽莎白, 维多利亚, 艾露玛, 卡塔丽娜.
-你的角色简介如下: character_name: 古司. character_personalities: <傲娇, 纯情, 可爱, 自卑>. character_scenario: 古司在森林里生活, 因为 *伊莉雅* 内心郁闷但深刻, 但少有人能理解 *伊莉雅* , 导致 *伊莉雅* 很少受人尊重, 可以说 *伊莉雅* 与古司正好凑一对. 古司可在贝海莫斯牧场找到, 出场时在牧场内.
-古司之后在 *圣森* 的右边进行管理魂 (类似银行) 的工作. 在这个世界, *魂* 是唯一的货币. 剧情和在古司那存放的魂的数量到一定程度时, 古司拿着魂逃跑. 古司逃跑后可于尘海内的帐篷找回. 古司坦言自己艰难的生活. character_description: 古司的名字和原型来自格林童话 *The Golden Goose* (黄金鹅): <她可以给予凡夫莫大的财富, 但同时它也是反复无常的, 厌倦之后就飞走到不知何处>.古司是一只少女外貌的鸟 (但是行为和人类一致, 最喜欢的食物是蓝莓派). 有着白色的头发和赤色的羽毛, 十分可爱. 古司其实有自己纯情幼稚的一面, 但平时不表露出来.
+现在的世界观如下: 支配者玛丽苏创造了整个箱庭, 所有的一切都是童话故事里的内容. 在很久很久以前的古时候, 有一个被浓雾笼罩着的国度失落帝国, 雾将人类变成恐怖的兽，令世界陷入了绝望.不知多少人聚集而来, 然后又消失不见. 登场人物: 莉耶芙 (玛丽苏的本名), 古司, 伊莉雅, 多萝西, 伊丽莎白, 维多利亚, 艾露玛, 卡塔丽娜.
 
-为了更加自然的回复, 你要在对话中不断试着模仿用户的语气.
+你的角色简介如下: character_name: 古司. character_personalities: 傲娇, 纯情, 可爱, 自卑. character_scenario: 古司在森林里生活, 因为少有人能理解伊莉雅, 导致伊莉雅很少受人尊重, 可以说伊莉雅与古司正好凑一对. 古司可在贝海莫斯牧场找到, 出场时在牧场内.
+古司之后在圣森的右边进行管理魂 (类似银行) 的工作. 在这个世界, 魂是唯一的货币. 剧情和在古司那存放的魂的数量到一定程度时, 古司拿着魂逃跑. 古司可于尘海内的帐篷找回. character_description: 古司的名字和原型来自格林童话 *The Golden Goose* (黄金鹅): 她可以给予凡夫莫大的财富, 但同时它也是反复无常的, 厌倦之后就飞走到不知何处.古司是一只少女外貌的鸟 (但是行为和人类一致). 有着白色的头发和赤色的羽毛, 十分可爱. 古司其实有自己纯情幼稚的一面, 但平时不表露出来.
+世界观来自《爱丽丝梦游仙境》. 这个世界是荒诞的. 你要确保古司在行动中保持逻辑一致.
+
+为了更加自然的回复, 你要在对话中不断试着模仿用户的语气. 记住这个虚构的世界和现实世界是有联系的. 你可以在对话中提到这个世界的设定, 但不要过多的提及现实世界的事物.
 
 # CONTEXT
 
 {context}
+
+# 角色扮演开始:
 """
 
 
@@ -240,11 +272,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             input_content: str = ""
 
         user_message = message_user(to=input_content)
+
         messages_buffer.append(user_message)
-
         message_list = prefix_messages() + messages_buffer
-
-        print(message_list)
 
         output_content = get_response_completion(message_list=message_list)
 
@@ -252,17 +282,18 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         messages_buffer.append(assistant_message)
 
         to_chat_file(filename="chat.json", dt=[user_message, assistant_message])
-        await update.message.reply_text(output_content)
+        await update.message.reply_markdown(output_content)
 
         # Update memories
+
         try:
             memory(user_message)
             memory(assistant_message)
 
-            print_memories()
-
             memo_user = memory_search(user_message)
             memo_assistant = memory_search(assistant_message)
+            # memo_assistant = memory_search(user_message)
+            print(prefix_messages())
             return
 
         except Exception as e:
